@@ -3,8 +3,9 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import org.apache.avro.Schema;
 import org.apache.avro.file.DataFileWriter;
-import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.*;
 import org.apache.avro.reflect.ReflectData;
+import org.apache.avro.reflect.ReflectDatumReader;
 import org.apache.avro.reflect.ReflectDatumWriter;
 
 import java.io.ByteArrayOutputStream;
@@ -19,9 +20,9 @@ public class Main {
 
         byte[] bytes = SerializeUtil.serialize(person);
 
-        Output output = new Output(8, 65536);
         Kryo kryo = new Kryo();
-        kryo.writeObject(output, person);
+//        Output output = new Output(8, 65536);
+//        kryo.writeObject(output, person);
 
 
         Code fastXml = () -> {
@@ -34,6 +35,8 @@ public class Main {
         };
 
 
+            Output output = new Output(8, 65536);
+            kryo.writeObject(output, person);
         Code kryoBufferSerialize = () -> {
             Input input = new Input(output.getBuffer());
             Person person3 = kryo.readObject(input, Person.class);
@@ -72,12 +75,33 @@ public class Main {
 //            }
         };
 
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        Encoder e = EncoderFactory.get().binaryEncoder(os, null);
+        DatumWriter<Person> ww = new ReflectDatumWriter<Person>(schema);
+        try {
+            ww.write(person, e);
+            e.flush();
+//                System.out.println(os.toString());
+        } catch (IOException e1) {
+            e1.printStackTrace();
+        }
+        ReflectData reflectData = ReflectData.get();
+        Schema schm = reflectData.getSchema(Person.class);
+        ReflectDatumReader<Person> reader = new ReflectDatumReader<Person>(schm);
+        Code kryoEncodeSerialize = () -> {
+            Decoder decoder = DecoderFactory.get().binaryDecoder(os.toByteArray(), null);
+            try {
+                Person person = reader.read(null, decoder);
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            }
+        };
 
 
         System.out.println(countTime(fastXml, 2000));
         System.out.println(countTime(javaSerialize, 2000));
         System.out.println(countTime(kryoBufferSerialize, 2000));
-        System.out.println(countTime(avroSerialize, 2000));
+        System.out.println(countTime(kryoEncodeSerialize, 2000));
 
     }
 
